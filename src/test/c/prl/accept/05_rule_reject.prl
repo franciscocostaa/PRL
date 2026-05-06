@@ -1,0 +1,7 @@
+campaign PricingLatam {
+    rules:
+        rule "Fraud" priority 999 {
+            if client.loyalty_points == 0 and order.total_amount > 5000
+            then reject("Operación excede monto seguro")
+        }
+}

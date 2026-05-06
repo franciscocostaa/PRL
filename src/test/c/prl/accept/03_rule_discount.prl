@@ -1,0 +1,6 @@
+campaign PricingLatam {
+    rules:
+        rule "Mayorista_B2B" priority 50 {
+            if client.segment == "B2B" then discount(25%)
+        }
+}

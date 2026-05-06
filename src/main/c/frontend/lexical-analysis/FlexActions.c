@@ -1,5 +1,7 @@
 #include "FlexActions.h"
 
+#include <string.h>
+
 /* MODULE INTERNAL STATE */
 
 static bool _logIgnoredLexemes = true;
@@ -52,12 +54,33 @@ static void _logTokenAction(const char * actionName, Token * token) {
 
 /* PUBLIC FUNCTIONS */
 
-CompilationStatus ArithmeticOperatorLexemeAction(TokenLabel label) {
+static char * _copyLexeme(const char * lexeme) {
+ size_t length = strlen(lexeme);
+ char * copy = (char *) calloc(length + 1, sizeof(char));
+ strncpy(copy, lexeme, length);
+ return copy;
+}
+
+static char * _copyStringLiteralValue(const char * lexeme) {
+ size_t length = strlen(lexeme);
+ if (length < 2) {
+  return _copyLexeme(lexeme);
+ }
+ char * copy = (char *) calloc(length - 1, sizeof(char));
+ strncpy(copy, lexeme + 1, length - 2);
+ return copy;
+}
+
+CompilationStatus TokenLexemeAction(TokenLabel label) {
 	Token * token = createToken(_lexicalAnalyzer, label);
 	_logTokenAction(__FUNCTION__, token);
 	CompilationStatus status = pushToken(_lexicalAnalyzer, token);
 	destroyToken(token);
 	return status;
+}
+
+CompilationStatus ArithmeticOperatorLexemeAction(TokenLabel label) {
+	return TokenLexemeAction(label);
 }
 
 CompilationStatus EnterImportExpressionLexemeAction(FlexContext context) {
@@ -114,6 +137,15 @@ CompilationStatus IntegerLexemeAction() {
 	return status;
 }
 
+CompilationStatus IdentifierLexemeAction() {
+	Token * token = createToken(_lexicalAnalyzer, ID);
+	token->semanticValue->string = _copyLexeme(token->lexeme);
+	_logTokenAction(__FUNCTION__, token);
+	CompilationStatus status = pushToken(_lexicalAnalyzer, token);
+	destroyToken(token);
+	return status;
+}
+
 CompilationStatus LeaveImportExpressionLexemeAction() {
 	pushInputBuffer(_inputBuffer);
 	leaveLexicalAnalyzerContext(_lexicalAnalyzer);
@@ -136,7 +168,12 @@ CompilationStatus LeaveMultilineCommentLexemeAction() {
 }
 
 CompilationStatus ParenthesisLexemeAction(TokenLabel label) {
-	Token * token = createToken(_lexicalAnalyzer, label);
+	return TokenLexemeAction(label);
+}
+
+CompilationStatus StringLiteralLexemeAction() {
+	Token * token = createToken(_lexicalAnalyzer, STRING_LITERAL);
+	token->semanticValue->string = _copyStringLiteralValue(token->lexeme);
 	_logTokenAction(__FUNCTION__, token);
 	CompilationStatus status = pushToken(_lexicalAnalyzer, token);
 	destroyToken(token);

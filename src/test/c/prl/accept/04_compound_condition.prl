@@ -1,0 +1,6 @@
+campaign PricingLatam {
+    rules:
+        rule "Complex" priority 10 {
+            if client.segment == "B2B" and order.item_count >= 100 then discount(25%)
+        }
+}

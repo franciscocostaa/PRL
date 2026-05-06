@@ -1,0 +1,17 @@
+campaign PricingLatam {
+    entities:
+        client: Client
+        product: Product
+        order: Order
+
+    invariants:
+        assert order.total_discount <= 40%
+
+    rules:
+        rule "Mayorista_B2B" priority 50 {
+            if client.segment == "B2B" and order.item_count >= 100
+            then discount(25%)
+        }
+}
+
+export PricingLatam to json

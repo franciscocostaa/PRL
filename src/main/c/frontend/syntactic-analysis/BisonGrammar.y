@@ -27,6 +27,7 @@ void yyerror(const YYLTYPE * location, const char * message) {}
 	/** Terminals. */
 
 	signed int integer;
+	char * string;
 	TokenLabel token;
 
 	/** Non-terminals. */
@@ -51,19 +52,54 @@ void yyerror(const YYLTYPE * location, const char * message) {}
 
 /** Terminals. */
 %token <integer> INTEGER
+%token <string> ID
+%token <string> STRING_LITERAL
 %token <token> ADD
+%token <token> AND
+%token <token> ASSERT
+%token <token> CAMPAIGN
 %token <token> CLOSE_BRACE
+%token <token> CLOSE_BRACKET
 %token <token> CLOSE_COMMENT
 %token <token> CLOSE_PARENTHESIS
+%token <token> COLON
+%token <token> COMMA
 %token <token> DIV
+%token <token> DISCOUNT
+%token <token> DISCOUNT_FIXED
+%token <token> DOT
+%token <token> ENTITIES
+%token <token> EQ
+%token <token> EXPORT
+%token <token> GT
+%token <token> GTE
+%token <token> IF
+%token <token> IN
+%token <token> INVARIANTS
+%token <token> LT
+%token <token> LTE
 %token <token> MUL
+%token <token> NEQ
+%token <token> NOT
 %token <token> OPEN_BRACE
+%token <token> OPEN_BRACKET
 %token <token> OPEN_COMMENT
 %token <token> OPEN_PARENTHESIS
+%token <token> OR
+%token <token> PERCENT
+%token <token> PRIORITY
+%token <token> REJECT_ACTION
+%token <token> RULE
+%token <token> RULES
 %token <token> SUB
+%token <token> SURCHARGE
+%token <token> THEN
+%token <token> TO
 
 %token <token> IGNORED
 %token <token> UNKNOWN
+
+%destructor { free($$); } <string>
 
 /** Non-terminals. */
 %type <constant> constant

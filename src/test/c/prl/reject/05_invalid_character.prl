@@ -1,0 +1,6 @@
+campaign Bad {
+    rules:
+        rule "BadRule" priority 1 {
+            if client.segment == @ then discount(10%)
+        }
+}
