@@ -269,4 +269,10 @@ void destroyTopLevelNode(TopLevelNode * topLevel);
 
 void printProgramNode(FILE * output, const ProgramNode * program);
 
+/** Temporary list type used during parsing of IN conditions. */
+typedef struct {
+	ExpressionNode ** items;
+	size_t count;
+} ExpressionList;
+
 #endif
