@@ -1,16 +1,105 @@
-[![✗](https://img.shields.io/badge/Release-v2.0.0-ffb600.svg?style=for-the-badge)](https://github.com/agustin-golmar/Flex-Bison-Compiler/releases)
+[![✗](https://img.shields.io/badge/Release-v2.0.0-ffb600.svg?style=for-the-badge)](https://github.com/franciscocostaa/PRL/releases)
 
-[![✗](https://github.com/agustin-golmar/Flex-Bison-Compiler/actions/workflows/pipeline.yaml/badge.svg?branch=production)](https://github.com/agustin-golmar/Flex-Bison-Compiler/actions/workflows/pipeline.yaml)
+[![✗](https://github.com/franciscocostaa/PRL/actions/workflows/pipeline.yaml/badge.svg?branch=production)](https://github.com/franciscocostaa/PRL/actions/workflows/pipeline.yaml)
 
-# Flex-Bison-Compiler
+# PRL — Pricing Rule Language
 
-A base compiler example, developed with Flex and Bison.
+A domain-specific language (DSL) for declarative definition of pricing rules, discounts, surcharges, and commercial invariants. Built with Flex and Bison on top of the Flex-Bison-Compiler base framework.
 
+* [Language Overview](#language-overview)
+* [Postponed Features](#postponed-features)
 * [Requirements](#requirements)
 * [Configuration](#configuration)
 * [Commands](#commands)
 * [CI/CD](#cicd)
 * [Recommended Extensions](#recommended-extensions)
+
+## Language Overview
+
+A PRL program is composed of one or more **campaigns**, optional **export** statements, and (Stage III) simulation and static-analysis directives.
+
+```prl
+campaign PricingLatam {
+    entities:
+        client: Client
+        product: Product
+        order: Order
+
+    invariants:
+        assert order.total_discount <= 40%
+
+    rules:
+        rule "Mayorista_B2B" priority 50 {
+            if client.segment == "B2B" and order.item_count >= 100
+            then discount(25%)
+        }
+        rule "Bloqueo_Fraude" priority 999 {
+            if client.loyalty_points == 0 and order.total_amount > 5000
+            then reject("Operación excede monto seguro para usuario nuevo")
+        }
+}
+
+export PricingLatam to json
+```
+
+### Supported actions
+
+| Action | Description |
+| :----- | :---------- |
+| `discount(<value>%)` | Apply a percentage discount |
+| `discount_fixed(<value>)` | Apply a fixed-amount discount |
+| `surcharge(<value>%)` | Apply a percentage surcharge |
+| `reject("<reason>")` | Reject the transaction with a message |
+
+### Supported operators
+
+| Type | Operators |
+| :--- | :-------- |
+| Relational | `==`, `!=`, `>`, `<`, `>=`, `<=` |
+| Logical | `and`, `or`, `not` |
+| Membership | `in [...]` |
+
+## Postponed Features
+
+The following constructs were specified in the Stage I design document but are **not yet implemented in the grammar**. They are planned for **Stage III (Backend)**:
+
+### Campaign inheritance
+
+```prl
+extend CyberMondayLatam from PricingLatam {
+    drop rule "Mayorista_B2B"
+
+    rules:
+        rule "Cyber_Descuento_Global" priority 10 {
+            if order.item_count > 0 then discount(30%)
+        }
+}
+```
+
+`extend ... from ...` derives a new campaign from a base one. `drop rule "<name>"` removes an inherited rule. These require a symbol table (Stage III semantic analysis) to resolve campaign references.
+
+### Simulation blocks
+
+```prl
+simulation "Test_Acumulacion" on RetailStandard {
+    given:
+        client.segment = "student"
+        order.item_count = 6
+        order.total_amount = 1000
+    expect:
+        order.final_amount == 750
+}
+```
+
+`simulation` blocks define unit tests for campaign logic. They require a runtime evaluation engine (Stage III backend).
+
+### Static analysis
+
+```prl
+detect_shadowing on CyberMondayLatam
+```
+
+`detect_shadowing` warns about rules that can never be evaluated because a higher-priority rule with a broader condition already covers them. Requires rule-condition analysis (Stage III backend).
 
 ## Requirements
 
