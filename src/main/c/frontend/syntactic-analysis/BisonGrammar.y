@@ -226,7 +226,7 @@ condition: condition OR condition
 	| expression rel_op expression
 		{ $$ = createComparisonConditionNode($1, $2, $3); }
 	| expression IN OPEN_BRACKET expression_list CLOSE_BRACKET
-		{ $$ = createInConditionNode($1, $4->items, $4->count); free($4->items); free($4); }
+		{ $$ = createInConditionNode($1, $4->items, $4->count); free($4); }
 	| OPEN_PARENTHESIS condition CLOSE_PARENTHESIS
 		{ $$ = $2; }
 	| expression
