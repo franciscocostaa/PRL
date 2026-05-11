@@ -1,0 +1,12 @@
+// Single-line comment before campaign
+campaign CommentTest { /* inline block comment */
+    rules:
+        /*
+         * Multi-line block comment
+         * spanning several lines
+         */
+        rule "Discount" priority 1 {
+            // Condition with line comment
+            if client.segment == "B2B" then discount(10%) /* trailing comment */
+        }
+}

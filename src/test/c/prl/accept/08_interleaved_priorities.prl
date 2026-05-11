@@ -1,0 +1,12 @@
+campaign PriorityTest {
+    rules:
+        rule "HighPriority" priority 999 {
+            if client.loyalty_points > 100 then discount(20%)
+        }
+        rule "LowPriority" priority 1 {
+            if client.loyalty_points > 0 then discount(5%)
+        }
+        rule "MidPriority" priority 50 {
+            if client.loyalty_points > 50 then discount(10%)
+        }
+}

@@ -1,0 +1,6 @@
+campaign FixedDiscount {
+    rules:
+        rule "FixedAmount" priority 1 {
+            if order.total_amount > 100 then discount_fixed(50)
+        }
+}

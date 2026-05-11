@@ -1,0 +1,13 @@
+campaign CampaignA {
+    rules:
+        rule "RuleA" priority 1 {
+            if client.segment == "B2B" then discount(10%)
+        }
+}
+
+campaign CampaignB {
+    rules:
+        rule "RuleB" priority 1 {
+            if order.total_amount > 1000 then discount(15%)
+        }
+}

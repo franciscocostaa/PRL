@@ -1,0 +1,6 @@
+campaign FlagTest {
+    rules:
+        rule "LoyalCustomer" priority 1 {
+            if client.loyalty_points then discount(5%)
+        }
+}

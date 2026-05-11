@@ -1,0 +1,9 @@
+campaign MultiExport {
+    rules:
+        rule "Basic" priority 1 {
+            if order.total_amount > 0 then discount(1%)
+        }
+}
+
+export MultiExport to json
+export MultiExport to sql

@@ -1,0 +1,6 @@
+campaign SurchargePolicy {
+    rules:
+        rule "CashSurcharge" priority 1 {
+            if order.payment_method == "cash" then surcharge(5%)
+        }
+}

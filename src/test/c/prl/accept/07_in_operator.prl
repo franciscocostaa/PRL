@@ -1,0 +1,7 @@
+campaign CategoryDiscount {
+    rules:
+        rule "Electronics" priority 1 {
+            if product.category in ["electronics", "appliances", "computing"]
+            then discount(10%)
+        }
+}
