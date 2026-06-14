@@ -1,0 +1,8 @@
+// Semantic error: two campaigns share the same name.
+campaign Duplicated {
+    rules:
+}
+
+campaign Duplicated {
+    rules:
+}

@@ -1,0 +1,11 @@
+// Semantic error: the rule references entity 'order', but the campaign only
+// declares 'client' in its entities section (entity binding is enforced).
+campaign Bounded {
+    entities:
+        client: Client
+
+    rules:
+        rule "BadReference" priority 1 {
+            if order.total_amount > 100 then discount(10%)
+        }
+}

@@ -1,0 +1,6 @@
+// Semantic error: export references a campaign that was never declared.
+campaign Real {
+    rules:
+}
+
+export Ghost to json

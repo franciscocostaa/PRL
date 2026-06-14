@@ -2,8 +2,6 @@
 
 /* MODULE INTERNAL STATE */
 
-const char _indentationCharacter = ' ';
-const char _indentationSize = 4;
 static Logger * _logger = NULL;
 
 /** Shutdown module's internal state. */
@@ -20,159 +18,223 @@ ModuleDestructor initializeGeneratorModule() {
 	return _shutdownGeneratorModule;
 }
 
-/** PRIVATE FUNCTIONS */
+/* PRIVATE FUNCTIONS */
 
-static char * _indentation(const unsigned int indentationLevel);
-static const char _expressionTypeToCharacter(const ExpressionType type);
-static void _generateConstant(const unsigned int indentationLevel, Constant * constant);
-static void _generateEpilogue(const int value);
-static void _generateExpression(const unsigned int indentationLevel, Expression * expression);
-static void _generateFactor(const unsigned int indentationLevel, Factor * factor);
-static void _generateProgram(Program * program);
-static void _generatePrologue(void);
-static void _output(const unsigned int indentationLevel, const char * const format, ...);
-
-/**
- * Converts and expression type to the proper character of the operation
- * involved, or returns '\0' if that's not possible.
- */
-static const char _expressionTypeToCharacter(const ExpressionType type) {
-	switch (type) {
-		case ADDITION: return '+';
-		case DIVISION: return '/';
-		case MULTIPLICATION: return '*';
-		case SUBTRACTION: return '-';
-		default:
-			logError(_logger, "The specified expression type cannot be converted into character: %d", type);
-			return '\0';
+static const char * _relationalOperatorSymbol(RelOpKind kind) {
+	switch (kind) {
+		case REL_OP_EQ: return "==";
+		case REL_OP_NEQ: return "!=";
+		case REL_OP_GT: return ">";
+		case REL_OP_LT: return "<";
+		case REL_OP_GTE: return ">=";
+		case REL_OP_LTE: return "<=";
+		default: return "?";
 	}
 }
 
 /**
- * Generates the output of a constant.
+ * Writes a string as the contents of a JSON string value, escaping the
+ * characters that JSON requires (quotes, backslash and control characters). The
+ * surrounding quotes are NOT emitted by this function.
  */
-static void _generateConstant(const unsigned int indentationLevel, Constant * constant) {
-	_output(indentationLevel, "%s", "[ $C$, circle, draw, black!20\n");
-	_output(1 + indentationLevel, "%s%d%s", "[ $", constant->value, "$, circle, draw ]\n");
-	_output(indentationLevel, "%s", "]\n");
+static void _emitJsonEscaped(FILE * output, const char * string) {
+	if (string == NULL) {
+		return;
+	}
+	for (const char * c = string; *c != '\0'; c++) {
+		switch (*c) {
+			case '"': fputs("\\\"", output); break;
+			case '\\': fputs("\\\\", output); break;
+			case '\n': fputs("\\n", output); break;
+			case '\t': fputs("\\t", output); break;
+			case '\r': fputs("\\r", output); break;
+			default:
+				if ((unsigned char) *c < 0x20) {
+					fprintf(output, "\\u%04x", (unsigned char) *c);
+				}
+				else {
+					fputc(*c, output);
+				}
+		}
+	}
 }
 
 /**
- * Creates the epilogue of the generated output, that is, the final lines that
- * completes a valid Latex document.
+ * Renders an expression inline as a JSON-safe fragment (used inside the "if"
+ * string value). String literals are wrapped in escaped quotes.
  */
-static void _generateEpilogue(const int value) {
-	_output(0, "%s%d%s",
-		"            [ $", value, "$, circle, draw, blue ]\n"
-		"        ]\n"
-		"    \\end{forest}\n"
-		"\\end{document}\n\n"
-	);
-}
-
-/**
- * Generates the output of an expression.
- */
-static void _generateExpression(const unsigned int indentationLevel, Expression * expression) {
-	_output(indentationLevel, "%s", "[ $E$, circle, draw, black!20\n");
-	switch (expression->type) {
-		case ADDITION:
-		case DIVISION:
-		case MULTIPLICATION:
-		case SUBTRACTION:
-			_generateExpression(1 + indentationLevel, expression->leftExpression);
-			_output(1 + indentationLevel, "%s%c%s", "[ $", _expressionTypeToCharacter(expression->type), "$, circle, draw, purple ]\n");
-			_generateExpression(1 + indentationLevel, expression->rightExpression);
+static void _emitExpressionInline(FILE * output, const ExpressionNode * expression) {
+	if (expression == NULL) {
+		return;
+	}
+	switch (expression->kind) {
+		case EXPRESSION_FIELD_ACCESS:
+			fprintf(output, "%s.%s", expression->fieldAccess->entityName, expression->fieldAccess->fieldName);
 			break;
-		case FACTOR:
-			_generateFactor(1 + indentationLevel, expression->factor);
-			break;
-		default:
-			logError(_logger, "The specified expression type is unknown: %d", expression->type);
+		case EXPRESSION_LITERAL:
+			switch (expression->literal->kind) {
+				case LITERAL_INTEGER:
+					fprintf(output, "%d", expression->literal->integerValue);
+					break;
+				case LITERAL_PERCENTAGE:
+					fprintf(output, "%d%%", expression->literal->percentageValue);
+					break;
+				case LITERAL_STRING:
+					fputs("\\\"", output);
+					_emitJsonEscaped(output, expression->literal->stringValue);
+					fputs("\\\"", output);
+					break;
+			}
 			break;
 	}
-	_output(indentationLevel, "%s", "]\n");
 }
 
-/**
- * Generates the output of a factor.
- */
-static void _generateFactor(const unsigned int indentationLevel, Factor * factor) {
-	_output(indentationLevel, "%s", "[ $F$, circle, draw, black!20\n");
-	switch (factor->type) {
-		case CONSTANT:
-			_generateConstant(1 + indentationLevel, factor->constant);
+/** Renders a condition inline as a JSON-safe fragment for the "if" field. */
+static void _emitConditionInline(FILE * output, const ConditionNode * condition) {
+	if (condition == NULL) {
+		return;
+	}
+	switch (condition->kind) {
+		case CONDITION_OR:
+			_emitConditionInline(output, condition->left);
+			fputs(" or ", output);
+			_emitConditionInline(output, condition->right);
 			break;
-		case EXPRESSION:
-			_output(1 + indentationLevel, "%s", "[ $($, circle, draw, purple ]\n");
-			_generateExpression(1 + indentationLevel, factor->expression);
-			_output(1 + indentationLevel, "%s", "[ $)$, circle, draw, purple ]\n");
+		case CONDITION_AND:
+			_emitConditionInline(output, condition->left);
+			fputs(" and ", output);
+			_emitConditionInline(output, condition->right);
 			break;
-		default:
-			logError(_logger, "The specified factor type is unknown: %d", factor->type);
+		case CONDITION_NOT:
+			fputs("not ", output);
+			_emitConditionInline(output, condition->operand);
+			break;
+		case CONDITION_COMPARISON:
+			_emitExpressionInline(output, condition->leftExpression);
+			fprintf(output, " %s ", _relationalOperatorSymbol(condition->relOp));
+			_emitExpressionInline(output, condition->rightExpression);
+			break;
+		case CONDITION_IN:
+			_emitExpressionInline(output, condition->inExpression);
+			fputs(" in [", output);
+			for (size_t i = 0; i < condition->optionCount; i++) {
+				if (i > 0) {
+					fputs(", ", output);
+				}
+				_emitExpressionInline(output, condition->options[i]);
+			}
+			fputc(']', output);
+			break;
+		case CONDITION_EXPRESSION:
+			_emitExpressionInline(output, condition->expression);
 			break;
 	}
-	_output(indentationLevel, "%s", "]\n");
 }
 
-/**
- * Generates the output of the program.
- */
-static void _generateProgram(Program * program) {
-	_generateExpression(3, program->expression);
+/** Emits the "then" action object of a rule. */
+static void _emitActionJson(FILE * output, const ActionNode * action) {
+	if (action == NULL) {
+		fputs("null", output);
+		return;
+	}
+	switch (action->kind) {
+		case ACTION_DISCOUNT:
+			fprintf(output, "{ \"action\": \"discount\", \"value\": \"%d%%\" }", action->value->literal->percentageValue);
+			break;
+		case ACTION_SURCHARGE:
+			fprintf(output, "{ \"action\": \"surcharge\", \"value\": \"%d%%\" }", action->value->literal->percentageValue);
+			break;
+		case ACTION_DISCOUNT_FIXED:
+			fprintf(output, "{ \"action\": \"discount_fixed\", \"value\": %d }", action->value->literal->integerValue);
+			break;
+		case ACTION_REJECT:
+			fputs("{ \"action\": \"reject\", \"message\": \"", output);
+			_emitJsonEscaped(output, action->message);
+			fputs("\" }", output);
+			break;
+	}
 }
 
-/**
- * Creates the prologue of the generated output, a Latex document that renders
- * a tree thanks to the Forest package.
- *
- * @see https://ctan.dcc.uchile.cl/graphics/pgf/contrib/forest/forest-doc.pdf
- */
-static void _generatePrologue(void) {
-	_output(0, "%s",
-		"\\documentclass{standalone}\n\n"
-		"\\usepackage[utf8]{inputenc}\n"
-		"\\usepackage[T1]{fontenc}\n"
-		"\\usepackage{amsmath}\n"
-		"\\usepackage{forest}\n"
-		"\\usepackage{microtype}\n\n"
-		"\\begin{document}\n"
-		"    \\centering\n"
-		"    \\begin{forest}\n"
-		"        [ \\text{$=$}, circle, draw, purple\n"
-	);
+static void _generateCampaignJson(FILE * output, const CampaignNode * campaign, const char * format) {
+	fputs("  {\n", output);
+	fputs("    \"campaign\": \"", output);
+	_emitJsonEscaped(output, campaign->name);
+	fputs("\",\n", output);
+	fputs("    \"format\": \"", output);
+	_emitJsonEscaped(output, format);
+	fputs("\",\n", output);
+
+	fputs("    \"entities\": [", output);
+	for (size_t i = 0; i < campaign->entityCount; i++) {
+		fputs(i == 0 ? " " : ", ", output);
+		fputs("{ \"name\": \"", output);
+		_emitJsonEscaped(output, campaign->entities[i]->name);
+		fputs("\", \"type\": \"", output);
+		_emitJsonEscaped(output, campaign->entities[i]->typeName);
+		fputs("\" }", output);
+	}
+	fputs(campaign->entityCount == 0 ? "],\n" : " ],\n", output);
+
+	fputs("    \"invariants\": [", output);
+	for (size_t i = 0; i < campaign->invariantCount; i++) {
+		fputs(i == 0 ? " \"" : ", \"", output);
+		_emitConditionInline(output, campaign->invariants[i]->condition);
+		fputc('"', output);
+	}
+	fputs(campaign->invariantCount == 0 ? "],\n" : " ],\n", output);
+
+	fputs("    \"rules\": [", output);
+	for (size_t i = 0; i < campaign->ruleCount; i++) {
+		const RuleNode * rule = campaign->rules[i];
+		fputs(i == 0 ? "\n" : ",\n", output);
+		fputs("      { \"name\": \"", output);
+		_emitJsonEscaped(output, rule->name);
+		fprintf(output, "\", \"priority\": %d, \"if\": \"", rule->priority);
+		_emitConditionInline(output, rule->condition);
+		fputs("\", \"then\": ", output);
+		_emitActionJson(output, rule->action);
+		fputs(" }", output);
+	}
+	fputs(campaign->ruleCount == 0 ? "]\n" : "\n    ]\n", output);
+
+	fputs("  }", output);
 }
 
-/**
- * Generates an indentation string for the specified level.
- */
-static char * _indentation(const unsigned int level) {
-	return indentation(_indentationCharacter, level, _indentationSize);
+static const CampaignNode * _findCampaign(const ProgramNode * program, const char * name) {
+	for (size_t i = 0; i < program->topLevelCount; i++) {
+		const TopLevelNode * topLevel = program->topLevels[i];
+		if (topLevel->kind == TOP_LEVEL_CAMPAIGN && strcmp(topLevel->campaign->name, name) == 0) {
+			return topLevel->campaign;
+		}
+	}
+	return NULL;
 }
 
-/**
- * Outputs a formatted string to standard output. The "fflush" instruction
- * allows to see the output even close to a failure, because it drops the
- * buffering.
- */
-static void _output(const unsigned int indentationLevel, const char * const format, ...) {
-	va_list arguments;
-	va_start(arguments, format);
-	char * indentation = _indentation(indentationLevel);
-	char * effectiveFormat = concatenate(2, indentation, format);
-	vfprintf(stdout, effectiveFormat, arguments);
-	fflush(stdout);
-	free(effectiveFormat);
-	free(indentation);
-	va_end(arguments);
-}
-
-/** PUBLIC FUNCTIONS */
+/* PUBLIC FUNCTIONS */
 
 void executeGenerator(CompilerState * compilerState) {
 	logDebugging(_logger, "Generating final output...");
-	_generatePrologue();
-	_generateProgram(compilerState->abstractSyntaxtTree);
-	_generateEpilogue(compilerState->value);
+	const ProgramNode * program = (const ProgramNode *) compilerState->abstractSyntaxtTree;
+	fputs("[\n", stdout);
+	bool first = true;
+	if (program != NULL) {
+		for (size_t i = 0; i < program->topLevelCount; i++) {
+			const TopLevelNode * topLevel = program->topLevels[i];
+			if (topLevel->kind != TOP_LEVEL_EXPORT) {
+				continue;
+			}
+			const CampaignNode * campaign = _findCampaign(program, topLevel->exportNode->campaignName);
+			if (campaign == NULL) {
+				continue;
+			}
+			if (!first) {
+				fputs(",\n", stdout);
+			}
+			first = false;
+			_generateCampaignJson(stdout, campaign, topLevel->exportNode->format);
+		}
+	}
+	fputs("\n]\n", stdout);
+	fflush(stdout);
 	logDebugging(_logger, "Generation is done.");
 }

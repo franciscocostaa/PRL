@@ -1,0 +1,7 @@
+// Semantic error: discount() expects a percentage value, not a bare integer.
+campaign BadAction {
+    rules:
+        rule "WrongDiscount" priority 1 {
+            if order.total_amount > 100 then discount(25)
+        }
+}

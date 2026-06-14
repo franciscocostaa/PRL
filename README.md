@@ -59,9 +59,25 @@ export PricingLatam to json
 | Logical | `and`, `or`, `not` |
 | Membership | `in [...]` |
 
+## Backend (Stage III)
+
+Stage III adds the compiler backend on top of the frontend AST:
+
+* **Semantic analysis** (`backend/semantic-analysis/`): a symbol table organised as a
+  stack of scopes (global → campaign) validates the program — unique campaign / entity /
+  rule names, entity-binding of `entity.field` references (enforced when a campaign declares
+  an `entities:` section), light type-checking of conditions and actions
+  (`discount`/`surcharge` require a percentage, `discount_fixed` an integer), and that every
+  `export` targets a declared campaign. Invalid programs are rejected with a non-zero exit
+  code.
+* **Code generation** (`backend/code-generation/`): each exported campaign is serialised to
+  **JSON** on standard output.
+
 ## Postponed Features
 
-The following constructs were specified in the Stage I design document but are **not yet implemented in the grammar**. They are planned for **Stage III (Backend)**:
+The following constructs were specified in the Stage I design document but remain **future
+work** (documented in the final report under "Futuras Extensiones"); they are not part of
+the fundamental Stage III deliverable:
 
 ### Campaign inheritance
 

@@ -1,0 +1,10 @@
+// Semantic error: two rules in the same campaign share the same name.
+campaign RuleDuplicated {
+    rules:
+        rule "Same" priority 1 {
+            if order.total_amount > 0 then discount(5%)
+        }
+        rule "Same" priority 2 {
+            if order.total_amount > 10 then discount(10%)
+        }
+}

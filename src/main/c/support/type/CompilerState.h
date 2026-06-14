@@ -12,17 +12,11 @@ typedef struct {
 	void * abstractSyntaxtTree;
 
 	/**
-	 * The computed value of the entire program (only for the calculator). You
-	 * should change or remove this field, or a random child will die, and it
-	 * will be your fault.
+	 * The symbol table (a stack of scopes) used by the semantic-analysis phase.
+	 * It is created and owned by the semantic analyzer for the duration of that
+	 * phase, and is NULL outside of it.
 	 */
-	signed int value;
-
-	// TODO: Add a symbol table.
-	// TODO: Add an stack to handle nested scopes.
-	// TODO: Add more configuration.
-	// TODO: Add whatever you need.
-	// TODO: ...
+	void * symbolTable;
 } CompilerState;
 
 #endif
