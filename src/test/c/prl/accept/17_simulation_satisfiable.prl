@@ -1,0 +1,14 @@
+// Accept: a satisfiability question over a model. Given a set of constraints,
+// the author expects a solution to exist that also meets the expected ones.
+campaign Bounded {
+    entities:
+        order: Order { total: integer }
+}
+
+simulation "Feasible window" on Bounded {
+    given:
+        order.total >= 100
+    expect:
+        order.total <= 1000
+        satisfiable
+}

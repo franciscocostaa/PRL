@@ -1,0 +1,11 @@
+// Reject: arithmetic operators require numeric operands, but 'segment' is a
+// string property.
+campaign C {
+    entities:
+        client: Client { segment: string }
+
+    rules:
+        rule "Bad" priority 1 {
+            if client.segment * 2 >= 4 then discount(5%)
+        }
+}

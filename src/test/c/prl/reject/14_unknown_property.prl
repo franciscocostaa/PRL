@@ -1,0 +1,11 @@
+// Reject: the schema of 'client' declares only 'segment', so the access
+// 'client.discount_rate' references a property that does not exist.
+campaign C {
+    entities:
+        client: Client { segment: string }
+
+    rules:
+        rule "Bad" priority 1 {
+            if client.discount_rate == "x" then discount(5%)
+        }
+}

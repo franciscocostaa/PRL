@@ -1,0 +1,14 @@
+// Accept: a well-formed unsatisfiability question. The author asserts that no
+// solution can satisfy the given and expected constraints simultaneously.
+campaign Bounded {
+    entities:
+        order: Order { total: integer }
+}
+
+simulation "Empty window" on Bounded {
+    given:
+        order.total >= 100
+    expect:
+        order.total <= 10
+        unsatisfiable
+}

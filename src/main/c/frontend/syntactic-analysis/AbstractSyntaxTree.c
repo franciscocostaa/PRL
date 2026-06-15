@@ -75,6 +75,16 @@ static const char * _relOpKindName(RelOpKind kind) {
 	}
 }
 
+static const char * _arithOpKindName(ArithOpKind kind) {
+	switch (kind) {
+		case ARITH_ADD: return "+";
+		case ARITH_SUB: return "-";
+		case ARITH_MUL: return "*";
+		case ARITH_DIV: return "/";
+		default: return "?";
+	}
+}
+
 static void _printActionNode(FILE * output, const ActionNode * action, unsigned int level) {
 	if (action == NULL) {
 		return;
@@ -111,6 +121,11 @@ static void _printExpressionNode(FILE * output, const ExpressionNode * expressio
 					fprintf(output, "Percentage(%d%%)\n", expression->literal->percentageValue);
 					break;
 			}
+			break;
+		case EXPRESSION_ARITHMETIC:
+			fprintf(output, "Arithmetic(%s)\n", _arithOpKindName(expression->arithOp));
+			_printExpressionNode(output, expression->leftOperand, level + 1);
+			_printExpressionNode(output, expression->rightOperand, level + 1);
 			break;
 	}
 }
@@ -215,6 +230,13 @@ TopLevelNode * createTopLevelExportNode(ExportNode * exportNode) {
 	return topLevel;
 }
 
+TopLevelNode * createTopLevelSimulationNode(SimulationNode * simulation) {
+	TopLevelNode * topLevel = (TopLevelNode *) calloc(1, sizeof(TopLevelNode));
+	topLevel->kind = TOP_LEVEL_SIMULATION;
+	topLevel->simulation = simulation;
+	return topLevel;
+}
+
 CampaignNode * createCampaignNode(const char * name) {
 	CampaignNode * campaign = (CampaignNode *) calloc(1, sizeof(CampaignNode));
 	campaign->name = _copyString(name);
@@ -226,6 +248,13 @@ EntityDeclNode * createEntityDeclNode(const char * name, const char * typeName) 
 	entity->name = _copyString(name);
 	entity->typeName = _copyString(typeName);
 	return entity;
+}
+
+PropertyNode * createPropertyNode(const char * name, const char * typeName) {
+	PropertyNode * property = (PropertyNode *) calloc(1, sizeof(PropertyNode));
+	property->name = _copyString(name);
+	property->typeName = _copyString(typeName);
+	return property;
 }
 
 InvariantNode * createInvariantNode(ConditionNode * condition) {
@@ -241,6 +270,14 @@ RuleNode * createRuleNode(const char * name, int priority, ConditionNode * condi
 	rule->condition = condition;
 	rule->action = action;
 	return rule;
+}
+
+SimulationNode * createSimulationNode(const char * name, const char * campaignName) {
+	SimulationNode * simulation = (SimulationNode *) calloc(1, sizeof(SimulationNode));
+	simulation->name = _copyString(name);
+	simulation->campaignName = _copyString(campaignName);
+	simulation->satExpectation = SAT_UNSPECIFIED;
+	return simulation;
 }
 
 ConditionNode * createBinaryConditionNode(ConditionKind kind, ConditionNode * left, ConditionNode * right) {
@@ -323,6 +360,15 @@ ExpressionNode * createPercentageLiteralNode(int value) {
 	return expression;
 }
 
+ExpressionNode * createArithmeticExpressionNode(ArithOpKind arithOp, ExpressionNode * leftOperand, ExpressionNode * rightOperand) {
+	ExpressionNode * expression = (ExpressionNode *) calloc(1, sizeof(ExpressionNode));
+	expression->kind = EXPRESSION_ARITHMETIC;
+	expression->arithOp = arithOp;
+	expression->leftOperand = leftOperand;
+	expression->rightOperand = rightOperand;
+	return expression;
+}
+
 ActionNode * createActionNode(ActionKind kind, ExpressionNode * value, const char * message) {
 	ActionNode * action = (ActionNode *) calloc(1, sizeof(ActionNode));
 	action->kind = kind;
@@ -348,6 +394,11 @@ void addCampaignEntityNode(CampaignNode * campaign, EntityDeclNode * entity) {
 	campaign->entities[campaign->entityCount++] = entity;
 }
 
+void addEntityPropertyNode(EntityDeclNode * entity, PropertyNode * property) {
+	entity->properties = (PropertyNode **) realloc(entity->properties, sizeof(PropertyNode *) * (entity->propertyCount + 1));
+	entity->properties[entity->propertyCount++] = property;
+}
+
 void addCampaignInvariantNode(CampaignNode * campaign, InvariantNode * invariant) {
 	campaign->invariants = (InvariantNode **) realloc(campaign->invariants, sizeof(InvariantNode *) * (campaign->invariantCount + 1));
 	campaign->invariants[campaign->invariantCount++] = invariant;
@@ -356,6 +407,16 @@ void addCampaignInvariantNode(CampaignNode * campaign, InvariantNode * invariant
 void addCampaignRuleNode(CampaignNode * campaign, RuleNode * rule) {
 	campaign->rules = (RuleNode **) realloc(campaign->rules, sizeof(RuleNode *) * (campaign->ruleCount + 1));
 	campaign->rules[campaign->ruleCount++] = rule;
+}
+
+void addSimulationGivenNode(SimulationNode * simulation, ConditionNode * condition) {
+	simulation->given = (ConditionNode **) realloc(simulation->given, sizeof(ConditionNode *) * (simulation->givenCount + 1));
+	simulation->given[simulation->givenCount++] = condition;
+}
+
+void addSimulationExpectNode(SimulationNode * simulation, ConditionNode * condition) {
+	simulation->expect = (ConditionNode **) realloc(simulation->expect, sizeof(ConditionNode *) * (simulation->expectCount + 1));
+	simulation->expect[simulation->expectCount++] = condition;
 }
 
 void destroyActionNode(ActionNode * action) {
@@ -417,9 +478,21 @@ void destroyConditionNode(ConditionNode * condition) {
 
 void destroyEntityDeclNode(EntityDeclNode * entity) {
 	if (entity != NULL) {
+		for (size_t i = 0; i < entity->propertyCount; i++) {
+			destroyPropertyNode(entity->properties[i]);
+		}
+		free(entity->properties);
 		free(entity->name);
 		free(entity->typeName);
 		free(entity);
+	}
+}
+
+void destroyPropertyNode(PropertyNode * property) {
+	if (property != NULL) {
+		free(property->name);
+		free(property->typeName);
+		free(property);
 	}
 }
 
@@ -439,6 +512,10 @@ void destroyExpressionNode(ExpressionNode * expression) {
 				break;
 			case EXPRESSION_LITERAL:
 				destroyLiteralNode(expression->literal);
+				break;
+			case EXPRESSION_ARITHMETIC:
+				destroyExpressionNode(expression->leftOperand);
+				destroyExpressionNode(expression->rightOperand);
 				break;
 		}
 		free(expression);
@@ -488,6 +565,22 @@ void destroyRuleNode(RuleNode * rule) {
 	}
 }
 
+void destroySimulationNode(SimulationNode * simulation) {
+	if (simulation != NULL) {
+		for (size_t i = 0; i < simulation->givenCount; i++) {
+			destroyConditionNode(simulation->given[i]);
+		}
+		for (size_t i = 0; i < simulation->expectCount; i++) {
+			destroyConditionNode(simulation->expect[i]);
+		}
+		free(simulation->given);
+		free(simulation->expect);
+		free(simulation->name);
+		free(simulation->campaignName);
+		free(simulation);
+	}
+}
+
 void destroyTopLevelNode(TopLevelNode * topLevel) {
 	if (topLevel != NULL) {
 		switch (topLevel->kind) {
@@ -497,8 +590,19 @@ void destroyTopLevelNode(TopLevelNode * topLevel) {
 			case TOP_LEVEL_EXPORT:
 				destroyExportNode(topLevel->exportNode);
 				break;
+			case TOP_LEVEL_SIMULATION:
+				destroySimulationNode(topLevel->simulation);
+				break;
 		}
 		free(topLevel);
+	}
+}
+
+static const char * _satExpectationName(SatExpectation expectation) {
+	switch (expectation) {
+		case SAT_SATISFIABLE: return "satisfiable";
+		case SAT_UNSATISFIABLE: return "unsatisfiable";
+		default: return "unspecified";
 	}
 }
 
@@ -514,8 +618,13 @@ void printProgramNode(FILE * output, const ProgramNode * program) {
 			_printIndent(output, 1);
 			fprintf(output, "Campaign(%s)\n", campaign->name);
 			for (size_t j = 0; j < campaign->entityCount; j++) {
+				const EntityDeclNode * entity = campaign->entities[j];
 				_printIndent(output, 2);
-				fprintf(output, "Entity(%s: %s)\n", campaign->entities[j]->name, campaign->entities[j]->typeName);
+				fprintf(output, "Entity(%s: %s)\n", entity->name, entity->typeName);
+				for (size_t k = 0; k < entity->propertyCount; k++) {
+					_printIndent(output, 3);
+					fprintf(output, "Property(%s: %s)\n", entity->properties[k]->name, entity->properties[k]->typeName);
+				}
 			}
 			for (size_t j = 0; j < campaign->invariantCount; j++) {
 				_printIndent(output, 2);
@@ -528,6 +637,21 @@ void printProgramNode(FILE * output, const ProgramNode * program) {
 				fprintf(output, "Rule(%s, priority=%d)\n", rule->name, rule->priority);
 				_printConditionNode(output, rule->condition, 3);
 				_printActionNode(output, rule->action, 3);
+			}
+		}
+		else if (topLevel->kind == TOP_LEVEL_SIMULATION) {
+			SimulationNode * simulation = topLevel->simulation;
+			_printIndent(output, 1);
+			fprintf(output, "Simulation(%s on %s, expect=%s)\n", simulation->name, simulation->campaignName, _satExpectationName(simulation->satExpectation));
+			for (size_t j = 0; j < simulation->givenCount; j++) {
+				_printIndent(output, 2);
+				fprintf(output, "Given\n");
+				_printConditionNode(output, simulation->given[j], 3);
+			}
+			for (size_t j = 0; j < simulation->expectCount; j++) {
+				_printIndent(output, 2);
+				fprintf(output, "Expect\n");
+				_printConditionNode(output, simulation->expect[j], 3);
 			}
 		}
 		else {

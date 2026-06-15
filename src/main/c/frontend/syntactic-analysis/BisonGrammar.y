@@ -56,10 +56,13 @@ void yyerror(const YYLTYPE * location, const char * message) {
 	InvariantNode * invariantNode;
 	LiteralNode * literalNode;
 	ProgramNode * programNode;
+	PropertyNode * propertyNode;
 	RuleNode * ruleNode;
+	SimulationNode * simulationNode;
 	TopLevelNode * topLevelNode;
 	RelOpKind relOp;
 	ExpressionList * expressionList;
+	PropertyList * propertyList;
 }
 
 /**
@@ -75,6 +78,8 @@ void yyerror(const YYLTYPE * location, const char * message) {
 %destructor { destroyExpressionNode($$); } <expressionNode>
 %destructor { destroyActionNode($$);     } <actionNode>
 %destructor { destroyExportNode($$);     } <exportNode>
+%destructor { destroySimulationNode($$); } <simulationNode>
+%destructor { destroyPropertyNode($$);   } <propertyNode>
 %destructor {
 	if ($$) {
 		for (size_t i = 0; i < $$->count; i++) destroyExpressionNode($$->items[i]);
@@ -82,6 +87,13 @@ void yyerror(const YYLTYPE * location, const char * message) {
 		free($$);
 	}
 } <expressionList>
+%destructor {
+	if ($$) {
+		for (size_t i = 0; i < $$->count; i++) destroyPropertyNode($$->items[i]);
+		free($$->items);
+		free($$);
+	}
+} <propertyList>
 
 /** Terminals. */
 %token <integer> INTEGER
@@ -103,7 +115,9 @@ void yyerror(const YYLTYPE * location, const char * message) {
 %token <token> DOT
 %token <token> ENTITIES
 %token <token> EQ
+%token <token> EXPECT
 %token <token> EXPORT
+%token <token> GIVEN
 %token <token> GT
 %token <token> GTE
 %token <token> IF
@@ -114,6 +128,7 @@ void yyerror(const YYLTYPE * location, const char * message) {
 %token <token> MUL
 %token <token> NEQ
 %token <token> NOT
+%token <token> ON
 %token <token> OPEN_BRACE
 %token <token> OPEN_BRACKET
 %token <token> OPEN_COMMENT
@@ -124,10 +139,13 @@ void yyerror(const YYLTYPE * location, const char * message) {
 %token <token> REJECT_ACTION
 %token <token> RULE
 %token <token> RULES
+%token <token> SATISFIABLE
+%token <token> SIMULATION
 %token <token> SUB
 %token <token> SURCHARGE
 %token <token> THEN
 %token <token> TO
+%token <token> UNSATISFIABLE
 
 %token <token> IGNORED
 %token <token> UNKNOWN
@@ -136,20 +154,28 @@ void yyerror(const YYLTYPE * location, const char * message) {
 %type <programNode>    program
 %type <campaignNode>   campaign
 %type <exportNode>     export_stmt
+%type <simulationNode> simulation
 %type <conditionNode>  condition
 %type <expressionNode> expression
 %type <actionNode>     action
 %type <relOp>          rel_op
 %type <expressionList> expression_list
+%type <propertyNode>   property
+%type <propertyList>   property_list
 
 /**
- * Logical operator precedence: not > and > or.
+ * Operator precedence (lowest to highest): logical < relational < additive <
+ * multiplicative, mirroring the precedence of any algebraic language so that
+ * user-written equations such as `a.x * 2 + b.y >= 100` parse as expected.
  *
  * @see https://www.gnu.org/software/bison/manual/html_node/Precedence.html
  */
 %left OR
 %left AND
 %right NOT
+%nonassoc EQ NEQ GT LT GTE LTE IN
+%left ADD SUB
+%left MUL DIV
 
 %%
 
@@ -168,6 +194,8 @@ top_level_list: %empty
 		{ AppendTopLevelCampaignSemanticAction($2); }
 	| top_level_list export_stmt
 		{ AppendTopLevelExportSemanticAction($2); }
+	| top_level_list simulation
+		{ AppendTopLevelSimulationSemanticAction($2); }
 	;
 
 campaign: campaign_header OPEN_BRACE campaign_body CLOSE_BRACE
@@ -206,7 +234,19 @@ rule_list: %empty
 	;
 
 entity_decl: ID COLON ID
-	{ AddEntityDeclSemanticAction($1, $3); free($1); free($3); $1 = NULL; $3 = NULL; }
+		{ AddEntityDeclSemanticAction($1, $3, NULL); free($1); free($3); $1 = NULL; $3 = NULL; }
+	| ID COLON ID OPEN_BRACE property_list CLOSE_BRACE
+		{ AddEntityDeclSemanticAction($1, $3, $5); free($1); free($3); $1 = NULL; $3 = NULL; }
+	;
+
+property_list: property
+		{ $$ = MakePropertyListSemanticAction($1); }
+	| property_list COMMA property
+		{ $$ = AppendPropertyListSemanticAction($1, $3); }
+	;
+
+property: ID COLON ID
+		{ $$ = createPropertyNode($1, $3); free($1); free($3); $1 = NULL; $3 = NULL; }
 	;
 
 invariant: ASSERT condition
@@ -215,6 +255,39 @@ invariant: ASSERT condition
 
 rule: RULE STRING_LITERAL PRIORITY INTEGER OPEN_BRACE IF condition THEN action CLOSE_BRACE
 	{ AddRuleSemanticAction($2, $4, $7, $9); free($2); $2 = NULL; }
+	;
+
+simulation: simulation_header OPEN_BRACE simulation_body CLOSE_BRACE
+	{ $$ = EndSimulationSemanticAction(); }
+	;
+
+simulation_header: SIMULATION STRING_LITERAL ON ID
+	{ BeginSimulationSemanticAction($2, $4); free($2); free($4); $2 = NULL; $4 = NULL; }
+	;
+
+simulation_body: %empty
+	| simulation_body given_section
+	| simulation_body expect_section
+	;
+
+given_section: GIVEN COLON given_list
+	;
+
+expect_section: EXPECT COLON expect_list
+	;
+
+given_list: %empty
+	| given_list condition
+		{ AddSimulationGivenSemanticAction($2); }
+	;
+
+expect_list: %empty
+	| expect_list condition
+		{ AddSimulationExpectSemanticAction($2); }
+	| expect_list SATISFIABLE
+		{ SetSimulationSatExpectationSemanticAction(SAT_SATISFIABLE); }
+	| expect_list UNSATISFIABLE
+		{ SetSimulationSatExpectationSemanticAction(SAT_UNSATISFIABLE); }
 	;
 
 condition: condition OR condition
@@ -241,7 +314,15 @@ rel_op: EQ	{ $$ = REL_OP_EQ;  }
 	| LTE	{ $$ = REL_OP_LTE; }
 	;
 
-expression: ID DOT ID
+expression: expression ADD expression
+		{ $$ = createArithmeticExpressionNode(ARITH_ADD, $1, $3); }
+	| expression SUB expression
+		{ $$ = createArithmeticExpressionNode(ARITH_SUB, $1, $3); }
+	| expression MUL expression
+		{ $$ = createArithmeticExpressionNode(ARITH_MUL, $1, $3); }
+	| expression DIV expression
+		{ $$ = createArithmeticExpressionNode(ARITH_DIV, $1, $3); }
+	| ID DOT ID
 		{ $$ = createFieldAccessExpressionNode($1, $3); free($1); free($3); $1 = NULL; $3 = NULL; }
 	| INTEGER
 		{ $$ = createIntegerLiteralNode($1); }

@@ -6,6 +6,7 @@ static CompilerState * _compilerState = NULL;
 static Logger * _logger = NULL;
 static ProgramNode * _buildingProgram = NULL;
 static CampaignNode * _buildingCampaign = NULL;
+static SimulationNode * _buildingSimulation = NULL;
 
 /** Shutdown module's internal state. */
 void _shutdownBisonActionsModule() {
@@ -21,6 +22,10 @@ void _shutdownBisonActionsModule() {
 	if (_buildingCampaign != NULL) {
 		destroyCampaignNode(_buildingCampaign);
 		_buildingCampaign = NULL;
+	}
+	if (_buildingSimulation != NULL) {
+		destroySimulationNode(_buildingSimulation);
+		_buildingSimulation = NULL;
 	}
 	_compilerState = NULL;
 }
@@ -119,6 +124,11 @@ void AppendTopLevelExportSemanticAction(ExportNode * exportNode) {
 	addTopLevelNode(_buildingProgram, createTopLevelExportNode(exportNode));
 }
 
+void AppendTopLevelSimulationSemanticAction(SimulationNode * simulation) {
+	_logSyntacticAnalyzerAction(__FUNCTION__);
+	addTopLevelNode(_buildingProgram, createTopLevelSimulationNode(simulation));
+}
+
 void BeginCampaignSemanticAction(const char * name) {
 	_logSyntacticAnalyzerAction(__FUNCTION__);
 	_buildingCampaign = createCampaignNode(name);
@@ -131,9 +141,17 @@ CampaignNode * EndCampaignSemanticAction(void) {
 	return result;
 }
 
-void AddEntityDeclSemanticAction(const char * name, const char * typeName) {
+void AddEntityDeclSemanticAction(const char * name, const char * typeName, PropertyList * properties) {
 	_logSyntacticAnalyzerAction(__FUNCTION__);
-	addCampaignEntityNode(_buildingCampaign, createEntityDeclNode(name, typeName));
+	EntityDeclNode * entity = createEntityDeclNode(name, typeName);
+	if (properties != NULL) {
+		for (size_t i = 0; i < properties->count; i++) {
+			addEntityPropertyNode(entity, properties->items[i]);
+		}
+		free(properties->items);
+		free(properties);
+	}
+	addCampaignEntityNode(_buildingCampaign, entity);
 }
 
 void AddInvariantSemanticAction(ConditionNode * condition) {
@@ -144,6 +162,33 @@ void AddInvariantSemanticAction(ConditionNode * condition) {
 void AddRuleSemanticAction(const char * name, int priority, ConditionNode * condition, ActionNode * action) {
 	_logSyntacticAnalyzerAction(__FUNCTION__);
 	addCampaignRuleNode(_buildingCampaign, createRuleNode(name, priority, condition, action));
+}
+
+void BeginSimulationSemanticAction(const char * name, const char * campaignName) {
+	_logSyntacticAnalyzerAction(__FUNCTION__);
+	_buildingSimulation = createSimulationNode(name, campaignName);
+}
+
+void AddSimulationGivenSemanticAction(ConditionNode * condition) {
+	_logSyntacticAnalyzerAction(__FUNCTION__);
+	addSimulationGivenNode(_buildingSimulation, condition);
+}
+
+void AddSimulationExpectSemanticAction(ConditionNode * condition) {
+	_logSyntacticAnalyzerAction(__FUNCTION__);
+	addSimulationExpectNode(_buildingSimulation, condition);
+}
+
+void SetSimulationSatExpectationSemanticAction(SatExpectation expectation) {
+	_logSyntacticAnalyzerAction(__FUNCTION__);
+	_buildingSimulation->satExpectation = expectation;
+}
+
+SimulationNode * EndSimulationSemanticAction(void) {
+	_logSyntacticAnalyzerAction(__FUNCTION__);
+	SimulationNode * result = _buildingSimulation;
+	_buildingSimulation = NULL;
+	return result;
 }
 
 ExpressionList * MakeExpressionListSemanticAction(ExpressionNode * first) {
@@ -159,5 +204,21 @@ ExpressionList * AppendExpressionListSemanticAction(ExpressionList * list, Expre
 	_logSyntacticAnalyzerAction(__FUNCTION__);
 	list->items = realloc(list->items, (list->count + 1) * sizeof(ExpressionNode *));
 	list->items[list->count++] = expr;
+	return list;
+}
+
+PropertyList * MakePropertyListSemanticAction(PropertyNode * first) {
+	_logSyntacticAnalyzerAction(__FUNCTION__);
+	PropertyList * list = calloc(1, sizeof(PropertyList));
+	list->items = malloc(sizeof(PropertyNode *));
+	list->items[0] = first;
+	list->count = 1;
+	return list;
+}
+
+PropertyList * AppendPropertyListSemanticAction(PropertyList * list, PropertyNode * property) {
+	_logSyntacticAnalyzerAction(__FUNCTION__);
+	list->items = realloc(list->items, (list->count + 1) * sizeof(PropertyNode *));
+	list->items[list->count++] = property;
 	return list;
 }

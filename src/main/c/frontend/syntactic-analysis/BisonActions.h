@@ -29,12 +29,20 @@ void BeginProgramSemanticAction(void);
 ProgramNode * FinalizeProgramSemanticAction(void);
 void AppendTopLevelCampaignSemanticAction(CampaignNode * campaign);
 void AppendTopLevelExportSemanticAction(ExportNode * exportNode);
+void AppendTopLevelSimulationSemanticAction(SimulationNode * simulation);
 void BeginCampaignSemanticAction(const char * name);
 CampaignNode * EndCampaignSemanticAction(void);
-void AddEntityDeclSemanticAction(const char * name, const char * typeName);
+void AddEntityDeclSemanticAction(const char * name, const char * typeName, PropertyList * properties);
 void AddInvariantSemanticAction(ConditionNode * condition);
 void AddRuleSemanticAction(const char * name, int priority, ConditionNode * condition, ActionNode * action);
+void BeginSimulationSemanticAction(const char * name, const char * campaignName);
+void AddSimulationGivenSemanticAction(ConditionNode * condition);
+void AddSimulationExpectSemanticAction(ConditionNode * condition);
+void SetSimulationSatExpectationSemanticAction(SatExpectation expectation);
+SimulationNode * EndSimulationSemanticAction(void);
 ExpressionList * MakeExpressionListSemanticAction(ExpressionNode * first);
 ExpressionList * AppendExpressionListSemanticAction(ExpressionList * list, ExpressionNode * expr);
+PropertyList * MakePropertyListSemanticAction(PropertyNode * first);
+PropertyList * AppendPropertyListSemanticAction(PropertyList * list, PropertyNode * property);
 
 #endif

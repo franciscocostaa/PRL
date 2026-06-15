@@ -1,0 +1,5 @@
+// Reject: the entity schema declares the property 'segment' twice.
+campaign C {
+    entities:
+        client: Client { segment: string, segment: integer }
+}

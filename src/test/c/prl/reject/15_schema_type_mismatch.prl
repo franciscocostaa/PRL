@@ -1,0 +1,11 @@
+// Reject: 'segment' is declared as string, so comparing it against an integer
+// literal is ill-typed under the declared schema.
+campaign C {
+    entities:
+        client: Client { segment: string }
+
+    rules:
+        rule "Bad" priority 1 {
+            if client.segment >= 100 then discount(5%)
+        }
+}

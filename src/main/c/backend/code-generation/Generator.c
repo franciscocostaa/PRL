@@ -32,6 +32,16 @@ static const char * _relationalOperatorSymbol(RelOpKind kind) {
 	}
 }
 
+static const char * _arithmeticOperatorSymbol(ArithOpKind kind) {
+	switch (kind) {
+		case ARITH_ADD: return "+";
+		case ARITH_SUB: return "-";
+		case ARITH_MUL: return "*";
+		case ARITH_DIV: return "/";
+		default: return "?";
+	}
+}
+
 /**
  * Writes a string as the contents of a JSON string value, escaping the
  * characters that JSON requires (quotes, backslash and control characters). The
@@ -85,6 +95,11 @@ static void _emitExpressionInline(FILE * output, const ExpressionNode * expressi
 					fputs("\\\"", output);
 					break;
 			}
+			break;
+		case EXPRESSION_ARITHMETIC:
+			_emitExpressionInline(output, expression->leftOperand);
+			fprintf(output, " %s ", _arithmeticOperatorSymbol(expression->arithOp));
+			_emitExpressionInline(output, expression->rightOperand);
 			break;
 	}
 }
@@ -166,12 +181,22 @@ static void _generateCampaignJson(FILE * output, const CampaignNode * campaign, 
 
 	fputs("    \"entities\": [", output);
 	for (size_t i = 0; i < campaign->entityCount; i++) {
+		const EntityDeclNode * entity = campaign->entities[i];
 		fputs(i == 0 ? " " : ", ", output);
 		fputs("{ \"name\": \"", output);
-		_emitJsonEscaped(output, campaign->entities[i]->name);
+		_emitJsonEscaped(output, entity->name);
 		fputs("\", \"type\": \"", output);
-		_emitJsonEscaped(output, campaign->entities[i]->typeName);
-		fputs("\" }", output);
+		_emitJsonEscaped(output, entity->typeName);
+		fputs("\", \"properties\": [", output);
+		for (size_t j = 0; j < entity->propertyCount; j++) {
+			fputs(j == 0 ? " " : ", ", output);
+			fputs("{ \"name\": \"", output);
+			_emitJsonEscaped(output, entity->properties[j]->name);
+			fputs("\", \"type\": \"", output);
+			_emitJsonEscaped(output, entity->properties[j]->typeName);
+			fputs("\" }", output);
+		}
+		fputs(entity->propertyCount == 0 ? "] }" : " ] }", output);
 	}
 	fputs(campaign->entityCount == 0 ? "],\n" : " ],\n", output);
 
@@ -200,6 +225,50 @@ static void _generateCampaignJson(FILE * output, const CampaignNode * campaign, 
 	fputs("  }", output);
 }
 
+static const char * _satExpectationQuestion(SatExpectation expectation) {
+	switch (expectation) {
+		case SAT_SATISFIABLE: return "satisfiable";
+		case SAT_UNSATISFIABLE: return "unsatisfiable";
+		default: return "solve";
+	}
+}
+
+/**
+ * Materializes a simulation as a constraint-satisfaction problem: the model it
+ * runs on, the `given` constraints that bound the search space, the `expect`
+ * constraints a solution must additionally satisfy, and the satisfiability
+ * question being asked. A downstream solver consumes this to search for (or
+ * prove the absence of) a solution.
+ */
+static void _generateSimulationJson(FILE * output, const SimulationNode * simulation) {
+	fputs("  {\n", output);
+	fputs("    \"simulation\": \"", output);
+	_emitJsonEscaped(output, simulation->name);
+	fputs("\",\n", output);
+	fputs("    \"model\": \"", output);
+	_emitJsonEscaped(output, simulation->campaignName);
+	fputs("\",\n", output);
+
+	fputs("    \"given\": [", output);
+	for (size_t i = 0; i < simulation->givenCount; i++) {
+		fputs(i == 0 ? " \"" : ", \"", output);
+		_emitConditionInline(output, simulation->given[i]);
+		fputc('"', output);
+	}
+	fputs(simulation->givenCount == 0 ? "],\n" : " ],\n", output);
+
+	fputs("    \"expect\": [", output);
+	for (size_t i = 0; i < simulation->expectCount; i++) {
+		fputs(i == 0 ? " \"" : ", \"", output);
+		_emitConditionInline(output, simulation->expect[i]);
+		fputc('"', output);
+	}
+	fputs(simulation->expectCount == 0 ? "],\n" : " ],\n", output);
+
+	fprintf(output, "    \"question\": \"%s\"\n", _satExpectationQuestion(simulation->satExpectation));
+	fputs("  }", output);
+}
+
 static const CampaignNode * _findCampaign(const ProgramNode * program, const char * name) {
 	for (size_t i = 0; i < program->topLevelCount; i++) {
 		const TopLevelNode * topLevel = program->topLevels[i];
@@ -220,18 +289,24 @@ void executeGenerator(CompilerState * compilerState) {
 	if (program != NULL) {
 		for (size_t i = 0; i < program->topLevelCount; i++) {
 			const TopLevelNode * topLevel = program->topLevels[i];
-			if (topLevel->kind != TOP_LEVEL_EXPORT) {
-				continue;
+			if (topLevel->kind == TOP_LEVEL_EXPORT) {
+				const CampaignNode * campaign = _findCampaign(program, topLevel->exportNode->campaignName);
+				if (campaign == NULL) {
+					continue;
+				}
+				if (!first) {
+					fputs(",\n", stdout);
+				}
+				first = false;
+				_generateCampaignJson(stdout, campaign, topLevel->exportNode->format);
 			}
-			const CampaignNode * campaign = _findCampaign(program, topLevel->exportNode->campaignName);
-			if (campaign == NULL) {
-				continue;
+			else if (topLevel->kind == TOP_LEVEL_SIMULATION) {
+				if (!first) {
+					fputs(",\n", stdout);
+				}
+				first = false;
+				_generateSimulationJson(stdout, topLevel->simulation);
 			}
-			if (!first) {
-				fputs(",\n", stdout);
-			}
-			first = false;
-			_generateCampaignJson(stdout, campaign, topLevel->exportNode->format);
 		}
 	}
 	fputs("\n]\n", stdout);

@@ -1,0 +1,15 @@
+// Accept: entities declare a typed property schema, and field accesses are
+// type-checked against it (integer + integer >= integer).
+campaign Schemed {
+    entities:
+        client: Client { segment: string, tier: integer }
+        order: Order { item_count: integer, total_amount: integer }
+
+    rules:
+        rule "Loyalty" priority 20 {
+            if client.tier + order.item_count >= 10
+            then discount(5%)
+        }
+}
+
+export Schemed to json

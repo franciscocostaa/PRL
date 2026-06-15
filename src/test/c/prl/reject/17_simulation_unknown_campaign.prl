@@ -1,0 +1,5 @@
+// Reject: the simulation runs on a model that was never declared.
+simulation "Orphan" on DoesNotExist {
+    given:
+        order.total > 0
+}

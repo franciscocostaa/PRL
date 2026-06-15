@@ -1,0 +1,11 @@
+// Accept: user-written arithmetic equation inside a condition, with operator
+// precedence (multiplication before addition before comparison).
+campaign Promo {
+    rules:
+        rule "BulkValue" priority 10 {
+            if order.unit_price * order.item_count + 50 >= 1000
+            then discount(10%)
+        }
+}
+
+export Promo to json

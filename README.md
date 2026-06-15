@@ -16,7 +16,7 @@ A domain-specific language (DSL) for declarative definition of pricing rules, di
 
 ## Language Overview
 
-A PRL program is composed of one or more **campaigns**, optional **export** statements, and (Stage III) simulation and static-analysis directives.
+A PRL program is composed of one or more **campaigns**, optional **simulation** blocks (constraint-satisfaction questions over a model), and optional **export** statements.
 
 ```prl
 campaign PricingLatam {
@@ -58,6 +58,33 @@ export PricingLatam to json
 | Relational | `==`, `!=`, `>`, `<`, `>=`, `<=` |
 | Logical | `and`, `or`, `not` |
 | Membership | `in [...]` |
+| Arithmetic | `+`, `-`, `*`, `/` |
+
+### Entity schemas
+
+Entities may declare a typed property schema. When present, field accesses are validated and
+statically typed against it (instead of being treated as dynamic):
+
+```prl
+client: Client { segment: string, tier: integer }
+```
+
+### Simulation (satisfiability)
+
+A `simulation` poses a constraint-satisfaction question over a model: given a set of
+constraints, does a solution exist that *also* meets every expected constraint? `satisfiable`
+/ `unsatisfiable` states the expected answer.
+
+```prl
+simulation "Existe combo valido" on PricingLatam {
+    given:
+        client.segment == "B2B"
+        order.item_count >= 100
+    expect:
+        order.total_amount > 0
+        satisfiable
+}
+```
 
 ## Backend (Stage III)
 
@@ -65,19 +92,27 @@ Stage III adds the compiler backend on top of the frontend AST:
 
 * **Semantic analysis** (`backend/semantic-analysis/`): a symbol table organised as a
   stack of scopes (global → campaign) validates the program — unique campaign / entity /
-  rule names, entity-binding of `entity.field` references (enforced when a campaign declares
-  an `entities:` section), light type-checking of conditions and actions
-  (`discount`/`surcharge` require a percentage, `discount_fixed` an integer), and that every
-  `export` targets a declared campaign. Invalid programs are rejected with a non-zero exit
-  code.
+  rule / property names, entity-binding of `entity.field` references (enforced when a campaign
+  declares an `entities:` section), **schema-aware type checking** (a field declared in an
+  entity schema is typed by its declared type instead of being dynamic), **arithmetic
+  type checking**, action type checking (`discount`/`surcharge` require a percentage,
+  `discount_fixed` an integer), and that every `export` and `simulation` targets a declared
+  campaign. Invalid programs are rejected with a non-zero exit code.
 * **Code generation** (`backend/code-generation/`): each exported campaign is serialised to
-  **JSON** on standard output.
+  **JSON** on standard output, and each `simulation` is materialised as a
+  constraint-satisfaction problem (`model`, `given`, `expect`, `question`).
 
 ## Postponed Features
 
-The following constructs were specified in the Stage I design document but remain **future
-work** (documented in the final report under "Futuras Extensiones"); they are not part of
-the fundamental Stage III deliverable:
+The following constructs remain **future work** (documented in the final report under
+"Futuras Extensiones"); they are not part of the fundamental Stage III deliverable:
+
+### Simulation solver
+
+`simulation` blocks are fully parsed, type-checked against the model schema, and emitted as a
+constraint-satisfaction problem (see *Simulation (satisfiability)* above). What remains future
+work is the **solver** that actually searches for a satisfying assignment — or proves
+`unsatisfiable` — typically by translating the constraints to an SMT solver such as Z3.
 
 ### Campaign inheritance
 
@@ -92,22 +127,7 @@ extend CyberMondayLatam from PricingLatam {
 }
 ```
 
-`extend ... from ...` derives a new campaign from a base one. `drop rule "<name>"` removes an inherited rule. These require a symbol table (Stage III semantic analysis) to resolve campaign references.
-
-### Simulation blocks
-
-```prl
-simulation "Test_Acumulacion" on RetailStandard {
-    given:
-        client.segment = "student"
-        order.item_count = 6
-        order.total_amount = 1000
-    expect:
-        order.final_amount == 750
-}
-```
-
-`simulation` blocks define unit tests for campaign logic. They require a runtime evaluation engine (Stage III backend).
+`extend ... from ...` derives a new campaign from a base one. `drop rule "<name>"` removes an inherited rule.
 
 ### Static analysis
 
@@ -115,7 +135,7 @@ simulation "Test_Acumulacion" on RetailStandard {
 detect_shadowing on CyberMondayLatam
 ```
 
-`detect_shadowing` warns about rules that can never be evaluated because a higher-priority rule with a broader condition already covers them. Requires rule-condition analysis (Stage III backend).
+`detect_shadowing` warns about rules that can never be evaluated because a higher-priority rule with a broader condition already covers them. Requires rule-condition analysis.
 
 ## Requirements
 

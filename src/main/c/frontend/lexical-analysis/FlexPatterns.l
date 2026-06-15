@@ -76,7 +76,13 @@ string_literal     \"([^\"\\]|\\.)*\"
 "then"                             { return TokenLexemeAction(THEN); }
 "assert"                           { return TokenLexemeAction(ASSERT); }
 "export"                           { return TokenLexemeAction(EXPORT); }
+"simulation"                       { return TokenLexemeAction(SIMULATION); }
+"given"                            { return TokenLexemeAction(GIVEN); }
+"expect"                           { return TokenLexemeAction(EXPECT); }
+"unsatisfiable"                    { return TokenLexemeAction(UNSATISFIABLE); }
+"satisfiable"                      { return TokenLexemeAction(SATISFIABLE); }
 "to"                               { return TokenLexemeAction(TO); }
+"on"                               { return TokenLexemeAction(ON); }
 "and"                              { return TokenLexemeAction(AND); }
 "or"                               { return TokenLexemeAction(OR); }
 "not"                              { return TokenLexemeAction(NOT); }
@@ -97,6 +103,10 @@ string_literal     \"([^\"\\]|\\.)*\"
 ","                                { return TokenLexemeAction(COMMA); }
 "."                                { return TokenLexemeAction(DOT); }
 "%"                                { return TokenLexemeAction(PERCENT); }
+"+"                                { return TokenLexemeAction(ADD); }
+"-"                                { return TokenLexemeAction(SUB); }
+"*"                                { return TokenLexemeAction(MUL); }
+"/"                                { return TokenLexemeAction(DIV); }
 
 {string_literal}                    { return StringLiteralLexemeAction(); }
 {integer}                           { return IntegerLexemeAction(); }
